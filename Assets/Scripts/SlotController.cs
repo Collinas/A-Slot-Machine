@@ -1,62 +1,111 @@
+﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 
 /// <summary>
-/// Controlador de slots que gerencia a gera��o de n�meros aleat�rios, contagem de cr�ditos e jackpot.
+/// Controlador de slots que gerencia a geração de números aleatórios, contagem de créditos e jackpot.
 /// </summary>
 public class SlotController : MonoBehaviour
 {
+    [Header("Prefabs e Posições")]
     [SerializeField] private List<GameObject> prefabs; // Lista de 10 prefabs
-    [SerializeField] private List<Transform> gridPositions; // Lista de 9 posi��es no grid
-    [SerializeField] private Text counterText; // Texto do contador de cr�ditos
+    [SerializeField] private Transform initialPosReel1; // Posição inicial para o primeiro rolo
+    [SerializeField] private Transform initialPosReel2; // Posição inicial para o segundo rolo
+    [SerializeField] private Transform initialPosReel3; // Posição inicial para o terceiro rolo
+    [SerializeField] private List<Transform> firstReel; // Lista de 3 posições para o primeiro rolo
+    [SerializeField] private List<Transform> secondReel; // Lista de 3 posições para o segundo rolo
+    [SerializeField] private List<Transform> thirdReel; // Lista de 3 posições para o terceiro rolo
+    [SerializeField] private Transform finalPosReel1; // Posição final para o primeiro rolo
+    [SerializeField] private Transform finalPosReel2; // Posição final para o segundo rolo
+    [SerializeField] private Transform finalPosReel3; // Posição final para o terceiro rolo
+
+    [Header("UI Elements")]
+    [SerializeField] private Text counterText; // Texto do contador de créditos
     [SerializeField] private Text jackpotText; // Texto do valor do jackpot
-    [SerializeField] private GameObject numberContainer; // Container para os n�meros instanciados
+    [SerializeField] private GameObject numberContainer; // Container para os números instanciados
+
+    [Header("Configurações de Jogo")]
+    [SerializeField] private int initialCredits = 1; // Créditos iniciais
+    [SerializeField] private float initialJackpot = 300f; // Jackpot inicial
+    [SerializeField] private float jackpotIncrement = 0.01f; // Incremento do jackpot por rodada
+    [SerializeField] private float prefabMoveDuration = 0.5f; // Duração do movimento dos prefabs
+    [SerializeField] private float delayBetweenSpins = 0.5f; // Atraso entre as rotações e spawn dos prefabs temporários
+    [SerializeField] private float delayToPlayAgain = 1.0f; // Atraso para jogar novamente
 
     private List<GameObject> instantiatedPrefabs = new();
-    private int counter = 1;
-    private float jackpot = 300f;
-    private readonly string[] positionNames = { "NO", "O", "SO", "N", "C", "S", "NE", "E", "SE" };
+    private int counter;
+    private float jackpot;
+    private bool isSpinning = false;
 
     private void Start()
     {
+        counter = initialCredits;
+        jackpot = initialJackpot;
         ValidateSetup();
+        InitializeReels(); // Inicializa os rolos com 3 prefabs cada
         UpdateUI();
+    }
+
+    /// <summary>
+    /// Inicializa os rolos com 3 prefabs cada.
+    /// </summary>
+    private void InitializeReels()
+    {
+        for (int j = 0; j < 3; j++)
+        {
+            int randomIndex1 = Random.Range(0, prefabs.Count);
+            GameObject newPrefab1 = Instantiate(prefabs[randomIndex1], firstReel[j].position, Quaternion.identity, numberContainer.transform);
+            newPrefab1.name = $"number{randomIndex1 + 1}_reel1";
+            instantiatedPrefabs.Add(newPrefab1);
+
+            int randomIndex2 = Random.Range(0, prefabs.Count);
+            GameObject newPrefab2 = Instantiate(prefabs[randomIndex2], secondReel[j].position, Quaternion.identity, numberContainer.transform);
+            newPrefab2.name = $"number{randomIndex2 + 1}_reel2";
+            instantiatedPrefabs.Add(newPrefab2);
+
+            int randomIndex3 = Random.Range(0, prefabs.Count);
+            GameObject newPrefab3 = Instantiate(prefabs[randomIndex3], thirdReel[j].position, Quaternion.identity, numberContainer.transform);
+            newPrefab3.name = $"number{randomIndex3 + 1}_reel3";
+            instantiatedPrefabs.Add(newPrefab3);
+        }
     }
 
     private void Update()
     {
-        if (Input.GetKeyDown(KeyCode.Z)) HandleSpin();
+        if (Input.GetKeyDown(KeyCode.Z) && !isSpinning) HandleSpin();
         if (Input.GetKeyDown(KeyCode.X)) AddCredits(10);
     }
 
     /// <summary>
-    /// Valida a configura��o inicial do jogo.
+    /// Valida a configuração inicial do jogo.
     /// </summary>
     private void ValidateSetup()
     {
-        if (prefabs.Count != 10 || gridPositions.Count != 9)
+        if (prefabs.Count != 10 || firstReel.Count != 3 || secondReel.Count != 3 || thirdReel.Count != 3)
         {
-            Debug.LogError("Erro na configura��o: � necess�rio exatamente 10 prefabs e 9 posi��es no grid.");
+            Debug.LogError("Erro na configuração: É necessário exatamente 10 prefabs e 3 posições para cada rolo.");
         }
     }
 
     /// <summary>
-    /// Lida com a rota��o dos slots.
+    /// Lida com a rotação dos slots.
     /// </summary>
     private void HandleSpin()
     {
+        if (isSpinning) return;
         if (counter <= 0) return;
-        GenerateRandomPrefabs();
+        isSpinning = true;
+        StartCoroutine(SpinReels());
         counter--;
-        jackpot += 0.01f;
+        jackpot += jackpotIncrement;
         UpdateUI();
     }
 
     /// <summary>
-    /// Adiciona cr�ditos ao contador.
+    /// Adiciona créditos ao contador.
     /// </summary>
-    /// <param name="amount">Quantidade de cr�ditos a adicionar.</param>
+    /// <param name="amount">Quantidade de créditos a adicionar.</param>
     private void AddCredits(int amount)
     {
         counter += amount;
@@ -64,28 +113,154 @@ public class SlotController : MonoBehaviour
     }
 
     /// <summary>
-    /// Gera n�meros aleat�rios no grid e verifica pr�mios.
+    /// Gera números aleatórios e faz a animação dos rolos.
     /// </summary>
-    private void GenerateRandomPrefabs()
+    private IEnumerator SpinReels()
     {
-        ClearPreviousPrefabs();
+        // Start the temporary spin animation
+        StartCoroutine(TemporarySpinAnimation(prefabMoveDuration));
+
+        // Move existing prefabs to the final position and destroy them
+        yield return StartCoroutine(MoveAndDestroyExistingPrefabs());
+
+        // Clear the list of instantiated prefabs
+        instantiatedPrefabs.Clear();
+
         int[] middleRowIndices = new int[3];
 
-        for (int i = 0; i < gridPositions.Count; i++)
+        for (int j = 0; j < 3; j++)
         {
-            int randomIndex = Random.Range(0, prefabs.Count);
-            GameObject newPrefab = Instantiate(prefabs[randomIndex], gridPositions[i].position, Quaternion.identity, numberContainer.transform);
-            newPrefab.name = $"number{randomIndex + 1}_{positionNames[i]}";
-            instantiatedPrefabs.Add(newPrefab);
+            int randomIndex1 = Random.Range(0, prefabs.Count);
+            GameObject newPrefab1 = Instantiate(prefabs[randomIndex1], initialPosReel1.position, Quaternion.identity, numberContainer.transform);
+            newPrefab1.name = $"number{randomIndex1 + 1}_reel1";
+            instantiatedPrefabs.Add(newPrefab1);
+            StartCoroutine(MovePrefab(newPrefab1, firstReel[2 - j].position, finalPosReel1, prefabMoveDuration));
 
-            if (i == 1 || i == 4 || i == 7)
+            int randomIndex2 = Random.Range(0, prefabs.Count);
+            GameObject newPrefab2 = Instantiate(prefabs[randomIndex2], initialPosReel2.position, Quaternion.identity, numberContainer.transform);
+            newPrefab2.name = $"number{randomIndex2 + 1}_reel2";
+            instantiatedPrefabs.Add(newPrefab2);
+            StartCoroutine(MovePrefab(newPrefab2, secondReel[2 - j].position, finalPosReel2, prefabMoveDuration));
+
+            int randomIndex3 = Random.Range(0, prefabs.Count);
+            GameObject newPrefab3 = Instantiate(prefabs[randomIndex3], initialPosReel3.position, Quaternion.identity, numberContainer.transform);
+            newPrefab3.name = $"number{randomIndex3 + 1}_reel3";
+            instantiatedPrefabs.Add(newPrefab3);
+            StartCoroutine(MovePrefab(newPrefab3, thirdReel[2 - j].position, finalPosReel3, prefabMoveDuration));
+
+            if (j == 1)
             {
-                middleRowIndices[(i == 1) ? 0 : (i == 4) ? 1 : 2] = randomIndex + 1;
+                middleRowIndices[0] = randomIndex1 + 1;
+                middleRowIndices[1] = randomIndex2 + 1;
+                middleRowIndices[2] = randomIndex3 + 1;
             }
+
+            yield return new WaitForSeconds(delayBetweenSpins);
         }
+
+        yield return new WaitForSeconds(delayBetweenSpins);
 
         CheckWinningCombination(middleRowIndices);
         CheckJackpot();
+        yield return new WaitForSeconds(delayToPlayAgain); // Adiciona o atraso para jogar novamente
+        isSpinning = false;
+    }
+
+    /// <summary>
+    /// Animação temporária de rotação dos rolos.
+    /// </summary>
+    private IEnumerator TemporarySpinAnimation(float duration)
+    {
+        float elapsedTime = 0f;
+
+        while (elapsedTime < duration)
+        {
+            int randomIndex1 = Random.Range(0, prefabs.Count);
+            GameObject tempPrefab1 = Instantiate(prefabs[randomIndex1], initialPosReel1.position, Quaternion.identity, numberContainer.transform);
+            StartCoroutine(MovePrefab(tempPrefab1, finalPosReel1.position, finalPosReel1, prefabMoveDuration));
+            Destroy(tempPrefab1, prefabMoveDuration);
+
+            int randomIndex2 = Random.Range(0, prefabs.Count);
+            GameObject tempPrefab2 = Instantiate(prefabs[randomIndex2], initialPosReel2.position, Quaternion.identity, numberContainer.transform);
+            StartCoroutine(MovePrefab(tempPrefab2, finalPosReel2.position, finalPosReel2, prefabMoveDuration));
+            Destroy(tempPrefab2, prefabMoveDuration);
+
+            int randomIndex3 = Random.Range(0, prefabs.Count);
+            GameObject tempPrefab3 = Instantiate(prefabs[randomIndex3], initialPosReel3.position, Quaternion.identity, numberContainer.transform);
+            StartCoroutine(MovePrefab(tempPrefab3, finalPosReel3.position, finalPosReel3, prefabMoveDuration));
+            Destroy(tempPrefab3, prefabMoveDuration);
+
+            elapsedTime += delayBetweenSpins;
+            yield return new WaitForSeconds(delayBetweenSpins);
+        }
+    }
+
+    /// <summary>
+    /// Move o prefab de uma posição inicial para uma posição final com velocidade constante.
+    /// </summary>
+    private IEnumerator MovePrefab(GameObject prefab, Vector3 finalDestination, Transform moveToObject, float duration)
+    {
+        if (prefab == null) yield break; // Verifica se o prefab é nulo antes de iniciar a animação
+
+        Vector3 startPosition = prefab.transform.position;
+        Vector3 moveToPosition = moveToObject.position;
+        float distance = Vector3.Distance(startPosition, moveToPosition);
+        float speed = distance / duration;
+        float elapsedTime = 0;
+
+        while (elapsedTime < duration)
+        {
+            if (prefab == null) yield break; // Verifica se o prefab foi destruído durante a animação
+
+            prefab.transform.position = Vector3.MoveTowards(prefab.transform.position, finalDestination, speed * Time.deltaTime);
+            elapsedTime += Time.deltaTime;
+            yield return null;
+        }
+
+        if (prefab != null) // Verifica se o prefab ainda existe antes de definir a posição final
+        {
+            prefab.transform.position = finalDestination;
+        }
+    }
+    private IEnumerator MoveAndDestroyExistingPrefabs()
+    {
+        List<Coroutine> moveCoroutines = new List<Coroutine>();
+
+        // Move all existing prefabs to their final positions
+        foreach (var prefab in instantiatedPrefabs)
+        {
+            if (prefab != null)
+            {
+                // Determine which reel the prefab belongs to based on its name
+                if (prefab.name.Contains("_reel1"))
+                {
+                    moveCoroutines.Add(StartCoroutine(MovePrefab(prefab, finalPosReel1.position, finalPosReel1, prefabMoveDuration)));
+                }
+                else if (prefab.name.Contains("_reel2"))
+                {
+                    moveCoroutines.Add(StartCoroutine(MovePrefab(prefab, finalPosReel2.position, finalPosReel2, prefabMoveDuration)));
+                }
+                else if (prefab.name.Contains("_reel3"))
+                {
+                    moveCoroutines.Add(StartCoroutine(MovePrefab(prefab, finalPosReel3.position, finalPosReel3, prefabMoveDuration)));
+                }
+            }
+        }
+
+        // Wait for all move coroutines to finish
+        foreach (var coroutine in moveCoroutines)
+        {
+            yield return coroutine;
+        }
+
+        // Destroy all existing prefabs
+        foreach (var prefab in instantiatedPrefabs)
+        {
+            if (prefab != null)
+            {
+                Destroy(prefab);
+            }
+        }
     }
 
     /// <summary>
@@ -101,7 +276,7 @@ public class SlotController : MonoBehaviour
     }
 
     /// <summary>
-    /// Verifica se a fileira do meio cont�m uma combina��o vencedora.
+    /// Verifica se a fileira do meio contém uma combinação vencedora.
     /// </summary>
     private void CheckWinningCombination(int[] middleRow)
     {
@@ -113,7 +288,7 @@ public class SlotController : MonoBehaviour
         {
             int extraCredits = middleRow[0] + middleRow[1] + middleRow[2];
             counter += extraCredits;
-            Debug.Log($"Ganhou {extraCredits} cr�ditos!");
+            Debug.Log($"Ganhou {extraCredits} créditos!");
             UpdateCounterText();
         }
     }
@@ -127,14 +302,14 @@ public class SlotController : MonoBehaviour
         {
             int jackpotCredits = Mathf.FloorToInt(jackpot);
             counter += jackpotCredits;
-            jackpot = 300f;
-            Debug.Log($"Jackpot! Cr�ditos ganhos: {jackpotCredits}");
+            jackpot = initialJackpot;
+            Debug.Log($"Jackpot! Créditos ganhos: {jackpotCredits}");
             UpdateUI();
         }
     }
 
     /// <summary>
-    /// Atualiza a interface do usu�rio com os valores atuais.
+    /// Atualiza a interface do usuário com os valores atuais.
     /// </summary>
     private void UpdateUI()
     {
@@ -143,7 +318,7 @@ public class SlotController : MonoBehaviour
     }
 
     /// <summary>
-    /// Atualiza o texto do contador de cr�ditos.
+    /// Atualiza o texto do contador de créditos.
     /// </summary>
     private void UpdateCounterText()
     {
