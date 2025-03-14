@@ -24,6 +24,8 @@ public class SlotController : MonoBehaviour
     [SerializeField] private Text counterText; // Texto do contador de créditos
     [SerializeField] private Text jackpotText; // Texto do valor do jackpot
     [SerializeField] private GameObject numberContainer; // Container para os números instanciados
+    [SerializeField] private RawImage resultIndicator;
+    [SerializeField] private Text resultText; // Added field for result text
 
     [Header("Configurações de Jogo")]
     [SerializeField] private int initialCredits = 1; // Créditos iniciais
@@ -32,6 +34,11 @@ public class SlotController : MonoBehaviour
     [SerializeField] private float prefabMoveDuration = 0.5f; // Duração do movimento dos prefabs
     [SerializeField] private float delayBetweenSpins = 0.5f; // Atraso entre as rotações e spawn dos prefabs temporários
     [SerializeField] private float delayToPlayAgain = 1.0f; // Atraso para jogar novamente
+
+    [Header("Colors")]
+    [SerializeField] private Color defaultColor = Color.white; // Color for default state
+    [SerializeField] private Color winColor = Color.green; // Color for winning combination
+    [SerializeField] private Color loseColor = Color.red; // Color for losing combination
 
     private List<GameObject> instantiatedPrefabs = new();
     private int counter;
@@ -42,6 +49,8 @@ public class SlotController : MonoBehaviour
     {
         counter = initialCredits;
         jackpot = initialJackpot;
+        resultIndicator.color = defaultColor;
+        resultText.text = "";
         ValidateSetup();
         InitializeReels(); // Inicializa os rolos com 3 prefabs cada
         UpdateUI();
@@ -96,6 +105,8 @@ public class SlotController : MonoBehaviour
         if (isSpinning) return;
         if (counter <= 0) return;
         isSpinning = true;
+        resultIndicator.color = defaultColor;
+        resultText.text = "";
         StartCoroutine(SpinReels());
         counter--;
         jackpot += jackpotIncrement;
@@ -283,13 +294,28 @@ public class SlotController : MonoBehaviour
         bool hasWinningCombo = middleRow[0] == middleRow[1] && middleRow[1] == middleRow[2];
         bool hasJoker = middleRow[0] == 10 || middleRow[1] == 10 || middleRow[2] == 10;
         bool isPartialMatch = hasJoker && (middleRow[0] == middleRow[1] || middleRow[1] == middleRow[2] || middleRow[0] == middleRow[2]);
+        bool isWinningCombination = false;
+        int creditsGained = 0;
 
         if (hasWinningCombo || isPartialMatch)
         {
+            isWinningCombination = true;
             int extraCredits = middleRow[0] + middleRow[1] + middleRow[2];
+            creditsGained = extraCredits;
             counter += extraCredits;
             Debug.Log($"Ganhou {extraCredits} créditos!");
             UpdateCounterText();
+        }
+
+        if (isWinningCombination)
+        {
+            resultIndicator.color = winColor;
+            resultText.text = $"+{creditsGained}";
+        }
+        else
+        {
+            resultIndicator.color = loseColor;
+            resultText.text = "+0";
         }
     }
 
@@ -298,13 +324,24 @@ public class SlotController : MonoBehaviour
     /// </summary>
     private void CheckJackpot()
     {
+        bool isJackpot = false;
+        int jackpotAmount = 0;
+
         if (Random.Range(1, 201) == 1)
         {
+            isJackpot = true;
             int jackpotCredits = Mathf.FloorToInt(jackpot);
+            jackpotAmount = jackpotCredits;
             counter += jackpotCredits;
             jackpot = initialJackpot;
             Debug.Log($"Jackpot! Créditos ganhos: {jackpotCredits}");
             UpdateUI();
+        }
+
+        if (isJackpot)
+        {
+            resultIndicator.color = winColor;
+            resultText.text = $"Jackpot +{jackpotAmount}";
         }
     }
 
