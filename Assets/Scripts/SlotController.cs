@@ -9,55 +9,99 @@ using UnityEngine.UI;
 public class SlotController : MonoBehaviour
 {
     [Header("Prefabs e Posições")]
-    [SerializeField] private List<GameObject> prefabs; // Lista de 10 prefabs
-    [SerializeField] private Transform initialPosReel1; // Posição inicial para o primeiro rolo
-    [SerializeField] private Transform initialPosReel2; // Posição inicial para o segundo rolo
-    [SerializeField] private Transform initialPosReel3; // Posição inicial para o terceiro rolo
-    [SerializeField] private List<Transform> firstReel; // Lista de 3 posições para o primeiro rolo
-    [SerializeField] private List<Transform> secondReel; // Lista de 3 posições para o segundo rolo
-    [SerializeField] private List<Transform> thirdReel; // Lista de 3 posições para o terceiro rolo
-    [SerializeField] private Transform finalPosReel1; // Posição final para o primeiro rolo
-    [SerializeField] private Transform finalPosReel2; // Posição final para o segundo rolo
-    [SerializeField] private Transform finalPosReel3; // Posição final para o terceiro rolo
+    [Tooltip("Lista de prefabs que serão instanciados nos reels.")]
+    [SerializeField] private List<GameObject> prefabs;
+    [Tooltip("Posição de spawn do reel1.")]
+    [SerializeField] private Transform initialPosReel1;
+    [Tooltip("Posição de spawn do reel2.")]
+    [SerializeField] private Transform initialPosReel2;
+    [Tooltip("Posição de spawn do reel3.")]
+    [SerializeField] private Transform initialPosReel3;
+    [Tooltip("Lista de 3 posições do reel1.")]
+    [SerializeField] private List<Transform> firstReel;
+    [Tooltip("Lista de 3 posições do reel2.")]
+    [SerializeField] private List<Transform> secondReel;
+    [Tooltip("Lista de 3 posições do reel3.")]
+    [SerializeField] private List<Transform> thirdReel;
+    [Tooltip("Posição para destruir prefabs do reel1.")]
+    [SerializeField] private Transform finalPosReel1;
+    [Tooltip("Posição para destruir prefabs do reel2.")]
+    [SerializeField] private Transform finalPosReel2;
+    [Tooltip("Posição para destruir prefabs do reel3.")]
+    [SerializeField] private Transform finalPosReel3;
 
     [Header("UI Elements")]
-    [SerializeField] private Text counterText; // Texto do contador de créditos
-    [SerializeField] private Text jackpotText; // Texto do valor do jackpot
-    [SerializeField] private GameObject numberContainer; // Container para os números instanciados
+    [Tooltip("Texto que exibe o contador de créditos.")]
+    [SerializeField] private Text counterText;
+    [Tooltip("Texto que exibe o valor do jackpot.")]
+    [SerializeField] private Text jackpotText;
+    [Tooltip("Container para os prefabs instanciados.")]
+    [SerializeField] private GameObject numberContainer;
+    [Tooltip("Barra horizontal indicador do resultado da rodada.")]
     [SerializeField] private RawImage resultIndicator;
-    [SerializeField] private Text resultText; // Added field for result text
+    [Tooltip("Texto que exibe o créditos ganhos na rodada.")]
+    [SerializeField] private Text resultText;
 
     [Header("Configurações de Jogo")]
-    [SerializeField] private int initialCredits = 1; // Créditos iniciais
-    [SerializeField] private float initialJackpot = 300f; // Jackpot inicial
-    [SerializeField] private float jackpotIncrement = 0.01f; // Incremento do jackpot por rodada
-    [SerializeField] private float prefabMoveDuration = 0.5f; // Duração do movimento dos prefabs
-    [SerializeField] private float delayBetweenSpins = 0.5f; // Atraso entre as rotações e spawn dos prefabs temporários
-    [SerializeField] private float delayToPlayAgain = 1.0f; // Atraso para jogar novamente
+    [Tooltip("Créditos iniciais do jogador.")]
+    [SerializeField] private int initialCredits = 1;
+    [Tooltip("Valor inicial do jackpot.")]
+    [SerializeField] private float initialJackpot = 300f;
+    [Tooltip("Incremento do jackpot a cada rodada de acordo com a aposta feita.")]
+    [SerializeField] private float jackpotIncrement = 0.01f;
+    [Tooltip("Duração do movimento dos prefabs.")]
+    [SerializeField] private float prefabMoveDuration = 0.5f;
+    [Tooltip("Atraso entre os spawn de prefabs nos reels.")]
+    [SerializeField] private float delayBetweenSpins = 0.5f;
+    [Tooltip("Atraso para jogar novamente após uma rodada.")]
+    [SerializeField] private float delayToPlayAgain = 1.0f;
 
     [Header("Colors")]
-    [SerializeField] private Color defaultColor = Color.white; // Color for default state
-    [SerializeField] private Color winColor = Color.green; // Color for winning combination
-    [SerializeField] private Color loseColor = Color.red; // Color for losing combination
+    [Tooltip("Cor padrão do indicador de resultado.")]
+    [SerializeField] private Color defaultColor = Color.white;
+    [Tooltip("Cor do indicador de resultado em caso de ganho.")]
+    [SerializeField] private Color winColor = Color.green;
+    [Tooltip("Cor do indicador de resultado em caso de ganho nulo.")]
+    [SerializeField] private Color loseColor = Color.red;
 
-    private List<GameObject> instantiatedPrefabs = new();
+    // Lista de prefabs instanciados
+    private readonly List<GameObject> instantiatedPrefabs = new();
+    // Contador de créditos
     private int counter;
+    // Valor do jackpot
     private float jackpot;
+    // Indica se o jogo está acontecendo
     private bool isSpinning = false;
 
     private void Start()
     {
+        //Define o counter e o jackpot de acordo com os valores iniciais
         counter = initialCredits;
         jackpot = initialJackpot;
+        //Define os dois indicadores para default e nulo
         resultIndicator.color = defaultColor;
         resultText.text = "";
+        //Verifica se a configuração inicial está de acordo com o PDF
         ValidateSetup();
-        InitializeReels(); // Inicializa os rolos com 3 prefabs cada
+        //Inicializa os reels com os prefabs em cada um dos 9 slots predefinidos
+        InitializeReels();
+        //Atualiza a interface do usuário atualizando o valor dos créditos e do jackpot
         UpdateUI();
     }
 
     /// <summary>
-    /// Inicializa os rolos com 3 prefabs cada.
+    /// Valida a configuração inicial do jogo.
+    /// </summary>
+    private void ValidateSetup()
+    {
+        if (prefabs.Count != 10 || firstReel.Count != 3 || secondReel.Count != 3 || thirdReel.Count != 3)
+        {
+            Debug.LogError("Erro na configuração: É necessário exatamente 10 prefabs e 3 posições para cada rolo.");
+        }
+    }
+
+    /// <summary>
+    /// Inicializa os 3 reels com 3 prefabs cada.
     /// </summary>
     private void InitializeReels()
     {
@@ -80,22 +124,25 @@ public class SlotController : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// Atualiza a interface do usuário com os valores atuais.
+    /// </summary>
+    private void UpdateUI()
+    {
+        UpdateCounterText();
+        UpdateJackpotText();
+    }
+
     private void Update()
     {
+        ///<summary>
+        ///Ao apertar Z o jogo irá rodar, 
+        ///ao apertar X o jogador ganha 10 créditos e 
+        ///ao apertar C o jogador irá retirar todos os créditos
+        /// </summary>
         if (Input.GetKeyDown(KeyCode.Z) && !isSpinning) HandleSpin();
         if (Input.GetKeyDown(KeyCode.X) && !isSpinning) AddCredits(10);
         if (Input.GetKeyDown(KeyCode.C) && !isSpinning && counter > 0) CashoutCredits();
-    }
-
-    /// <summary>
-    /// Valida a configuração inicial do jogo.
-    /// </summary>
-    private void ValidateSetup()
-    {
-        if (prefabs.Count != 10 || firstReel.Count != 3 || secondReel.Count != 3 || thirdReel.Count != 3)
-        {
-            Debug.LogError("Erro na configuração: É necessário exatamente 10 prefabs e 3 posições para cada rolo.");
-        }
     }
 
     /// <summary>
@@ -112,6 +159,7 @@ public class SlotController : MonoBehaviour
         counter--;
         jackpot += jackpotIncrement;
         UpdateUI();
+        Debug.Log($"[Cassino Log] Jogada iniciada. Valor apostado: 1 crédito. Créditos restantes: {counter}");
     }
 
     /// <summary>
@@ -122,6 +170,17 @@ public class SlotController : MonoBehaviour
     {
         counter += amount;
         UpdateCounterText();
+        Debug.Log($"[Cassino Log] Créditos inseridos: {amount}. Total de créditos: {counter}");
+    }
+
+    /// <summary>
+    /// Realiza o cashout dos créditos.
+    /// </summary>
+    private void CashoutCredits()
+    {
+        Debug.Log($"[Cassino Log] Cashout realizado: {counter} créditos.");
+        counter = 0;
+        UpdateCounterText();
     }
 
     /// <summary>
@@ -129,13 +188,9 @@ public class SlotController : MonoBehaviour
     /// </summary>
     private IEnumerator SpinReels()
     {
-        // Start the temporary spin animation
         StartCoroutine(TemporarySpinAnimation(prefabMoveDuration));
-
-        // Move existing prefabs to the final position and destroy them
         yield return StartCoroutine(MoveAndDestroyExistingPrefabs());
 
-        // Clear the list of instantiated prefabs
         instantiatedPrefabs.Clear();
 
         int[] middleRowIndices = new int[3];
@@ -174,7 +229,7 @@ public class SlotController : MonoBehaviour
 
         CheckWinningCombination(middleRowIndices);
         CheckJackpot();
-        yield return new WaitForSeconds(delayToPlayAgain); // Adiciona o atraso para jogar novamente
+        yield return new WaitForSeconds(delayToPlayAgain);
         isSpinning = false;
     }
 
@@ -212,7 +267,7 @@ public class SlotController : MonoBehaviour
     /// </summary>
     private IEnumerator MovePrefab(GameObject prefab, Vector3 finalDestination, Transform moveToObject, float duration)
     {
-        if (prefab == null) yield break; // Verifica se o prefab é nulo antes de iniciar a animação
+        if (prefab == null) yield break;
 
         Vector3 startPosition = prefab.transform.position;
         Vector3 moveToPosition = moveToObject.position;
@@ -222,28 +277,26 @@ public class SlotController : MonoBehaviour
 
         while (elapsedTime < duration)
         {
-            if (prefab == null) yield break; // Verifica se o prefab foi destruído durante a animação
+            if (prefab == null) yield break;
 
             prefab.transform.position = Vector3.MoveTowards(prefab.transform.position, finalDestination, speed * Time.deltaTime);
             elapsedTime += Time.deltaTime;
             yield return null;
         }
 
-        if (prefab != null) // Verifica se o prefab ainda existe antes de definir a posição final
+        if (prefab != null)
         {
             prefab.transform.position = finalDestination;
         }
     }
     private IEnumerator MoveAndDestroyExistingPrefabs()
     {
-        List<Coroutine> moveCoroutines = new List<Coroutine>();
+        var moveCoroutines = new List<Coroutine>();
 
-        // Move all existing prefabs to their final positions
         foreach (var prefab in instantiatedPrefabs)
         {
             if (prefab != null)
             {
-                // Determine which reel the prefab belongs to based on its name
                 if (prefab.name.Contains("_reel1"))
                 {
                     moveCoroutines.Add(StartCoroutine(MovePrefab(prefab, finalPosReel1.position, finalPosReel1, prefabMoveDuration)));
@@ -259,13 +312,11 @@ public class SlotController : MonoBehaviour
             }
         }
 
-        // Wait for all move coroutines to finish
         foreach (var coroutine in moveCoroutines)
         {
             yield return coroutine;
         }
 
-        // Destroy all existing prefabs
         foreach (var prefab in instantiatedPrefabs)
         {
             if (prefab != null)
@@ -273,18 +324,6 @@ public class SlotController : MonoBehaviour
                 Destroy(prefab);
             }
         }
-    }
-
-    /// <summary>
-    /// Remove os prefabs antigos antes de gerar novos.
-    /// </summary>
-    private void ClearPreviousPrefabs()
-    {
-        foreach (var prefab in instantiatedPrefabs)
-        {
-            Destroy(prefab);
-        }
-        instantiatedPrefabs.Clear();
     }
 
     /// <summary>
@@ -304,7 +343,7 @@ public class SlotController : MonoBehaviour
             int extraCredits = middleRow[0] + middleRow[1] + middleRow[2];
             creditsGained = extraCredits;
             counter += extraCredits;
-            Debug.Log($"Ganhou {extraCredits} créditos!");
+            Debug.Log($"[Cassino Log] Jogada finalizada. Créditos ganhos: {extraCredits}. Total de créditos: {counter}");
             UpdateCounterText();
         }
 
@@ -317,6 +356,7 @@ public class SlotController : MonoBehaviour
         {
             resultIndicator.color = loseColor;
             resultText.text = "+0";
+            Debug.Log($"[Cassino Log] Jogada finalizada. Nenhum crédito ganho. Total de créditos: {counter}");
         }
     }
 
@@ -335,7 +375,7 @@ public class SlotController : MonoBehaviour
             jackpotAmount = jackpotCredits;
             counter += jackpotCredits;
             jackpot = initialJackpot;
-            Debug.Log($"Jackpot! Créditos ganhos: {jackpotCredits}");
+            Debug.Log($"[Cassino Log] Jackpot ganho! Créditos ganhos: {jackpotCredits}. Total de créditos: {counter}");
             UpdateUI();
         }
 
@@ -344,15 +384,6 @@ public class SlotController : MonoBehaviour
             resultIndicator.color = winColor;
             resultText.text = $"Jackpot +{jackpotAmount}";
         }
-    }
-
-    /// <summary>
-    /// Atualiza a interface do usuário com os valores atuais.
-    /// </summary>
-    private void UpdateUI()
-    {
-        UpdateCounterText();
-        UpdateJackpotText();
     }
 
     /// <summary>
@@ -369,15 +400,5 @@ public class SlotController : MonoBehaviour
     private void UpdateJackpotText()
     {
         jackpotText.text = Mathf.Floor(jackpot).ToString();
-    }
-
-    /// <summary>
-    /// Realiza o cashout dos créditos.
-    /// </summary>
-    private void CashoutCredits()
-    {
-        Debug.Log($"Cashout realizado: {counter} créditos.");
-        counter = 0;
-        UpdateCounterText();
     }
 }

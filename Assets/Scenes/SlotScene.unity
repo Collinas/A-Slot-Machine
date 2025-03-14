@@ -1792,8 +1792,8 @@ MonoBehaviour:
   initialCredits: 1
   initialJackpot: 300
   jackpotIncrement: 0.01
-  prefabMoveDuration: 0.5
-  delayBetweenSpins: 0.1
+  prefabMoveDuration: 0.125
+  delayBetweenSpins: 0.025
   delayToPlayAgain: 0.2
   defaultColor: {r: 1, g: 1, b: 1, a: 0.5019608}
   winColor: {r: 0, g: 1, b: 0, a: 0.5019608}
