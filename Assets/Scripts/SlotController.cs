@@ -83,7 +83,8 @@ public class SlotController : MonoBehaviour
     private void Update()
     {
         if (Input.GetKeyDown(KeyCode.Z) && !isSpinning) HandleSpin();
-        if (Input.GetKeyDown(KeyCode.X)) AddCredits(10);
+        if (Input.GetKeyDown(KeyCode.X) && !isSpinning) AddCredits(10);
+        if (Input.GetKeyDown(KeyCode.C) && !isSpinning && counter > 0) CashoutCredits();
     }
 
     /// <summary>
@@ -368,5 +369,15 @@ public class SlotController : MonoBehaviour
     private void UpdateJackpotText()
     {
         jackpotText.text = Mathf.Floor(jackpot).ToString();
+    }
+
+    /// <summary>
+    /// Realiza o cashout dos créditos.
+    /// </summary>
+    private void CashoutCredits()
+    {
+        Debug.Log($"Cashout realizado: {counter} créditos.");
+        counter = 0;
+        UpdateCounterText();
     }
 }
