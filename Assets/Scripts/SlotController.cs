@@ -1,9 +1,13 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Net.Sockets;
 using System.Text;
 using UnityEngine;
 using UnityEngine.UI;
+using System.Runtime.InteropServices;
+using System;
+using System.Threading;
 
 /// <summary>
 /// Controlador de slots que gerencia a geração de números aleatórios, contagem de créditos e jackpot.
@@ -74,34 +78,49 @@ public class SlotController : MonoBehaviour
     private readonly List<GameObject> instantiatedPrefabs = new();
     // Contador de créditos
     private int counter;
-    // Valor do jackpot
-    private float jackpot;
+    // Valor do jackpot local
+    private float localJackpot;
     // Indica se o jogo está acontecendo
     private bool isSpinning = false;
 
+    [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Auto)]
+    private static extern bool SetWindowText(IntPtr hWnd, string lpString);
+
+    private string GenerateInstanceId()
+    {
+        // Gera um ID único para a instância
+        return $"Instancia_{UnityEngine.Random.Range(1000, 9999)}";
+    }
+
     private void Start()
     {
-        //Define o counter e o jackpot de acordo com os valores iniciais
+        // Gera um ID único para a instância
+        instanceId = GenerateInstanceId();
+
+        // Define o título da janela da instância
+        IntPtr windowHandle = Process.GetCurrentProcess().MainWindowHandle;
+        if (windowHandle != IntPtr.Zero)
+        {
+            SetWindowText(windowHandle, $"{instanceId}");
+        }
+
+        // Define o counter e o jackpot de acordo com os valores iniciais
         counter = initialCredits;
-        jackpot = initialJackpot;
-        //Define os dois indicadores para default e nulo
+        localJackpot = initialJackpot;
         resultIndicator.color = defaultColor;
         resultText.text = "";
-        //Verifica se a configuração inicial está de acordo com o PDF
         ValidateSetup();
-        //Inicializa os reels com os prefabs em cada um dos 9 slots predefinidos
         InitializeReels();
-        //Atualiza a interface do usuário atualizando o valor dos créditos e do jackpot
         UpdateUI();
-
-        // Obtém o identificador da instância (pode ser o índice ou um ID único)
-        instanceId = GetInstanceId();
 
         // Conecta ao InstanceController
         ConnectToInstanceController();
 
-        // Envia mensagem de confirmação de que está ativo
-        SendMessageToInstanceController("SlotControllerAtivo");
+        // Envia mensagem de confirmação de que está ativo, incluindo o ID gerado
+        SendMessageToInstanceController($"SlotControllerAtivo:{instanceId}");
+
+        // Solicita o valor atual do Jackpot ao InstanceController
+        SendMessageToInstanceController("RequestJackpot");
     }
 
     private void OnApplicationQuit()
@@ -122,10 +141,62 @@ public class SlotController : MonoBehaviour
         {
             client = new TcpClient("127.0.0.1", 12345); // Conecta ao servidor na porta 12345
             stream = client.GetStream();
+
+            // Inicia uma thread para receber mensagens do InstanceController
+            Thread receiveThread = new Thread(new ThreadStart(ReceiveMessages));
+            receiveThread.Start();
         }
         catch (System.Exception e)
         {
             UnityEngine.Debug.LogError("Erro ao conectar ao InstanceController: " + e.Message);
+        }
+    }
+
+    private void ReceiveMessages()
+    {
+        byte[] buffer = new byte[1024];
+        int bytesRead;
+
+        while (client.Connected)
+        {
+            try
+            {
+                bytesRead = stream.Read(buffer, 0, buffer.Length);
+                if (bytesRead > 0)
+                {
+                    string message = Encoding.UTF8.GetString(buffer, 0, bytesRead);
+                    HandleMessageFromInstanceController(message);
+                }
+            }
+            catch (System.Exception e)
+            {
+                UnityEngine.Debug.LogError("Erro ao receber mensagem do InstanceController: " + e.Message);
+                break;
+            }
+        }
+    }
+
+    private void HandleMessageFromInstanceController(string message)
+    {
+        if (message.StartsWith("UpdateJackpot:"))
+        {
+            string[] parts = message.Split(':');
+            if (parts.Length >= 2)
+            {
+                float newJackpotValue = float.Parse(parts[1]);
+                localJackpot = newJackpotValue;
+                UpdateJackpotText();
+            }
+        }
+        else if (message.StartsWith("ResetJackpot:"))
+        {
+            string[] parts = message.Split(':');
+            if (parts.Length >= 2)
+            {
+                float newJackpotValue = float.Parse(parts[1]);
+                localJackpot = newJackpotValue;
+                UpdateJackpotText();
+            }
         }
     }
 
@@ -155,7 +226,7 @@ public class SlotController : MonoBehaviour
     {
         if (prefabs.Count != 10 || firstReel.Count != 3 || secondReel.Count != 3 || thirdReel.Count != 3)
         {
-            Debug.LogError("Erro na configuração: É necessário exatamente 10 prefabs e 3 posições para cada rolo.");
+            UnityEngine.Debug.LogError("Erro na configuração: É necessário exatamente 10 prefabs e 3 posições para cada rolo.");
         }
     }
 
@@ -166,17 +237,17 @@ public class SlotController : MonoBehaviour
     {
         for (int j = 0; j < 3; j++)
         {
-            int randomIndex1 = Random.Range(0, prefabs.Count);
+            int randomIndex1 = UnityEngine.Random.Range(0, prefabs.Count);
             GameObject newPrefab1 = Instantiate(prefabs[randomIndex1], firstReel[j].position, Quaternion.identity, numberContainer.transform);
             newPrefab1.name = $"number{randomIndex1 + 1}_reel1";
             instantiatedPrefabs.Add(newPrefab1);
 
-            int randomIndex2 = Random.Range(0, prefabs.Count);
+            int randomIndex2 = UnityEngine.Random.Range(0, prefabs.Count);
             GameObject newPrefab2 = Instantiate(prefabs[randomIndex2], secondReel[j].position, Quaternion.identity, numberContainer.transform);
             newPrefab2.name = $"number{randomIndex2 + 1}_reel2";
             instantiatedPrefabs.Add(newPrefab2);
 
-            int randomIndex3 = Random.Range(0, prefabs.Count);
+            int randomIndex3 = UnityEngine.Random.Range(0, prefabs.Count);
             GameObject newPrefab3 = Instantiate(prefabs[randomIndex3], thirdReel[j].position, Quaternion.identity, numberContainer.transform);
             newPrefab3.name = $"number{randomIndex3 + 1}_reel3";
             instantiatedPrefabs.Add(newPrefab3);
@@ -204,20 +275,11 @@ public class SlotController : MonoBehaviour
         if (Input.GetKeyDown(KeyCode.C) && !isSpinning && counter > 0) CashoutCredits();
     }
 
-
     // Método para enviar logs ao InstanceController
     private void SendLogToInstanceController(string logMessage)
     {
         string fullLogMessage = $"Log:{instanceId}:{logMessage}";
         SendMessageToInstanceController(fullLogMessage);
-    }
-
-    // Método para obter o identificador da instância
-    private string GetInstanceId()
-    {
-        // Aqui você pode gerar um ID único para a instância
-        // Por exemplo, usando o índice da instância ou um GUID
-        return $"Instancia_{UnityEngine.Random.Range(1000, 9999)}"; // Exemplo de ID aleatório
     }
 
     /// <summary>
@@ -232,11 +294,11 @@ public class SlotController : MonoBehaviour
         resultText.text = "";
         StartCoroutine(SpinReels());
         counter--;
-        jackpot += jackpotIncrement;
+        localJackpot += jackpotIncrement;
         UpdateUI();
 
         // Envia o log ao InstanceController
-        string logMessage = $"[Cassino Log] Jogada iniciada. Valor apostado: 1 crédito. Créditos restantes: {counter}";
+        string logMessage = "LOG001 START BET=1 CREDITS=" + counter;
         SendLogToInstanceController(logMessage);
     }
 
@@ -248,7 +310,8 @@ public class SlotController : MonoBehaviour
     {
         counter += amount;
         UpdateCounterText();
-        Debug.Log($"[Cassino Log] Créditos inseridos: {amount}. Total de créditos: {counter}");
+        string logMessage = "LOG002 ADD AMOUNT=" + amount + " CREDITS=" + counter;
+        SendLogToInstanceController(logMessage);
     }
 
     /// <summary>
@@ -256,7 +319,8 @@ public class SlotController : MonoBehaviour
     /// </summary>
     private void CashoutCredits()
     {
-        Debug.Log($"[Cassino Log] Cashout realizado: {counter} créditos.");
+        string logMessage = "LOG003 CASH AMOUNT=" + counter;
+        SendLogToInstanceController(logMessage);
         counter = 0;
         UpdateCounterText();
     }
@@ -275,19 +339,19 @@ public class SlotController : MonoBehaviour
 
         for (int j = 0; j < 3; j++)
         {
-            int randomIndex1 = Random.Range(0, prefabs.Count);
+            int randomIndex1 = UnityEngine.Random.Range(0, prefabs.Count);
             GameObject newPrefab1 = Instantiate(prefabs[randomIndex1], initialPosReel1.position, Quaternion.identity, numberContainer.transform);
             newPrefab1.name = $"number{randomIndex1 + 1}_reel1";
             instantiatedPrefabs.Add(newPrefab1);
             StartCoroutine(MovePrefab(newPrefab1, firstReel[2 - j].position, finalPosReel1, prefabMoveDuration));
 
-            int randomIndex2 = Random.Range(0, prefabs.Count);
+            int randomIndex2 = UnityEngine.Random.Range(0, prefabs.Count);
             GameObject newPrefab2 = Instantiate(prefabs[randomIndex2], initialPosReel2.position, Quaternion.identity, numberContainer.transform);
             newPrefab2.name = $"number{randomIndex2 + 1}_reel2";
             instantiatedPrefabs.Add(newPrefab2);
             StartCoroutine(MovePrefab(newPrefab2, secondReel[2 - j].position, finalPosReel2, prefabMoveDuration));
 
-            int randomIndex3 = Random.Range(0, prefabs.Count);
+            int randomIndex3 = UnityEngine.Random.Range(0, prefabs.Count);
             GameObject newPrefab3 = Instantiate(prefabs[randomIndex3], initialPosReel3.position, Quaternion.identity, numberContainer.transform);
             newPrefab3.name = $"number{randomIndex3 + 1}_reel3";
             instantiatedPrefabs.Add(newPrefab3);
@@ -320,17 +384,17 @@ public class SlotController : MonoBehaviour
 
         while (elapsedTime < duration)
         {
-            int randomIndex1 = Random.Range(0, prefabs.Count);
+            int randomIndex1 = UnityEngine.Random.Range(0, prefabs.Count);
             GameObject tempPrefab1 = Instantiate(prefabs[randomIndex1], initialPosReel1.position, Quaternion.identity, numberContainer.transform);
             StartCoroutine(MovePrefab(tempPrefab1, finalPosReel1.position, finalPosReel1, prefabMoveDuration));
             Destroy(tempPrefab1, prefabMoveDuration);
 
-            int randomIndex2 = Random.Range(0, prefabs.Count);
+            int randomIndex2 = UnityEngine.Random.Range(0, prefabs.Count);
             GameObject tempPrefab2 = Instantiate(prefabs[randomIndex2], initialPosReel2.position, Quaternion.identity, numberContainer.transform);
             StartCoroutine(MovePrefab(tempPrefab2, finalPosReel2.position, finalPosReel2, prefabMoveDuration));
             Destroy(tempPrefab2, prefabMoveDuration);
 
-            int randomIndex3 = Random.Range(0, prefabs.Count);
+            int randomIndex3 = UnityEngine.Random.Range(0, prefabs.Count);
             GameObject tempPrefab3 = Instantiate(prefabs[randomIndex3], initialPosReel3.position, Quaternion.identity, numberContainer.transform);
             StartCoroutine(MovePrefab(tempPrefab3, finalPosReel3.position, finalPosReel3, prefabMoveDuration));
             Destroy(tempPrefab3, prefabMoveDuration);
@@ -367,6 +431,7 @@ public class SlotController : MonoBehaviour
             prefab.transform.position = finalDestination;
         }
     }
+
     private IEnumerator MoveAndDestroyExistingPrefabs()
     {
         var moveCoroutines = new List<Coroutine>();
@@ -421,7 +486,8 @@ public class SlotController : MonoBehaviour
             int extraCredits = middleRow[0] + middleRow[1] + middleRow[2];
             creditsGained = extraCredits;
             counter += extraCredits;
-            Debug.Log($"[Cassino Log] Jogada finalizada. Créditos ganhos: {extraCredits}. Total de créditos: {counter}");
+            string logMessage = "LOG004 WIN GAIN=" + extraCredits + " CREDITS=" + counter;
+            SendLogToInstanceController(logMessage);
             UpdateCounterText();
         }
 
@@ -434,7 +500,8 @@ public class SlotController : MonoBehaviour
         {
             resultIndicator.color = loseColor;
             resultText.text = "+0";
-            Debug.Log($"[Cassino Log] Jogada finalizada. Nenhum crédito ganho. Total de créditos: {counter}");
+            string logMessage = "LOG005 LOSE CREDITS=" + counter;
+            SendLogToInstanceController(logMessage);
         }
     }
 
@@ -446,15 +513,17 @@ public class SlotController : MonoBehaviour
         bool isJackpot = false;
         int jackpotAmount = 0;
 
-        if (Random.Range(1, 201) == 1)
+        if (UnityEngine.Random.Range(1, 2) == 1)
         {
             isJackpot = true;
-            int jackpotCredits = Mathf.FloorToInt(jackpot);
+            int jackpotCredits = Mathf.FloorToInt(localJackpot);
             jackpotAmount = jackpotCredits;
             counter += jackpotCredits;
-            jackpot = initialJackpot;
-            Debug.Log($"[Cassino Log] Jackpot ganho! Créditos ganhos: {jackpotCredits}. Total de créditos: {counter}");
+            localJackpot = initialJackpot; // Reset local
             UpdateUI();
+
+            // Notifica o InstanceController que o Jackpot foi ganho
+            SendMessageToInstanceController($"JackpotWon:{localJackpot}");
         }
 
         if (isJackpot)
@@ -477,6 +546,6 @@ public class SlotController : MonoBehaviour
     /// </summary>
     private void UpdateJackpotText()
     {
-        jackpotText.text = Mathf.Floor(jackpot).ToString();
+        jackpotText.text = Mathf.Floor(localJackpot).ToString();
     }
 }

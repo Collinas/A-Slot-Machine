@@ -1791,7 +1791,7 @@ MonoBehaviour:
   resultText: {fileID: 946007414}
   initialCredits: 1
   initialJackpot: 300
-  jackpotIncrement: 0.01
+  jackpotIncrement: 1
   prefabMoveDuration: 0.125
   delayBetweenSpins: 0.025
   delayToPlayAgain: 0.2

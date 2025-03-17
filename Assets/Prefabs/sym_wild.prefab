@@ -11,7 +11,7 @@ GameObject:
   - component: {fileID: 5854138421758756031}
   - component: {fileID: 5920826181657614416}
   m_Layer: 0
-  m_Name: wild
+  m_Name: sym_wild
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0

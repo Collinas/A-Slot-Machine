@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+Ôªøusing System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
@@ -8,11 +8,15 @@ using System.Threading;
 using System;
 using System.Diagnostics;
 using System.Linq;
+using System.Collections;
 
 public class InstanceController : MonoBehaviour
 {
     [SerializeField]
-    private List<Text> instances;
+    private GameObject instancePrefab; // Prefab da inst√¢ncia que cont√©m Text e Button
+
+    [SerializeField]
+    private Transform contentContainer; // Container com VerticalLayoutGroup para exibir as inst√¢ncias
 
     [SerializeField]
     private GameObject textInfoPrefab; // Prefab para exibir as mensagens
@@ -20,58 +24,43 @@ public class InstanceController : MonoBehaviour
     [SerializeField]
     private Transform logContainer; // Container com VerticalLayoutGroup para exibir os logs
 
-    private int currentIndex = 0;
-
-    // Vari·veis para comunicaÁ„o via socket
+    // Vari√°veis para comunica√ß√£o via socket
     private TcpClient client;
     private TcpListener server;
     private Thread serverThread;
     private bool isServerRunning = false;
 
-    // Tamanho inicial das janelas
-    private int initialWidth = 800;  // Largura inicial
-    private int initialHeight = 600; // Altura inicial
-
-    // Lista para rastrear os processos das inst‚ncias abertas
+    // Lista para rastrear os processos das inst√¢ncias abertas
     private List<Process> instanceProcesses = new List<Process>();
+
+    // Lista para rastrear os IDs das inst√¢ncias
+    private List<int> instanceIds = new List<int>();
+
+    // Vari√°vel para armazenar o valor global do Jackpot
+    private float globalJackpot = 300f;
 
     void Start()
     {
-        // Define o tamanho da janela principal como 800x600
-        SetWindowSize(initialWidth, initialHeight);
+        Application.runInBackground = true; // Permite que o aplicativo rode em segundo plano
 
-        // Verifica se a lista foi configurada no inspetor
-        if (instances == null || instances.Count == 0)
+        // Verifica se o Content foi configurado no inspetor
+        if (contentContainer == null)
         {
-            UnityEngine.Debug.LogWarning("A lista de inst‚ncias n„o foi configurada no inspetor.");
-        }
-        else
-        {
-            // Garante que todas as inst‚ncias comecem fechadas
-            for (int i = 0; i < instances.Count; i++)
-            {
-                instances[i].text = "Instancia " + (i + 1) + " - Fechada";
-            }
+            UnityEngine.Debug.LogWarning("O Content container n√£o foi configurado no inspetor.");
         }
 
-        // Verifica se a inst‚ncia foi aberta com o argumento para carregar a cena "SlotScene"
+        // Verifica se a inst√¢ncia foi aberta com o argumento para carregar a cena "SlotScene"
         string[] args = Environment.GetCommandLineArgs();
         if (args.Length > 1 && args[1] == "SlotScene")
         {
             SceneManager.LoadScene("SlotScene");
-
-            // Redimensiona a janela para o tamanho inicial
-            SetWindowSize(initialWidth, initialHeight);
         }
 
-        // Inicia o servidor de comunicaÁ„o se for a primeira inst‚ncia
-        if (currentIndex == 0)
-        {
-            StartServer();
-        }
+        // Inicia o servidor de comunica√ß√£o se for a primeira inst√¢ncia
+        StartServer();
     }
 
-    // MÈtodo para iniciar o servidor de comunicaÁ„o
+    // M√©todo para iniciar o servidor de comunica√ß√£o
     private void StartServer()
     {
         isServerRunning = true;
@@ -79,7 +68,7 @@ public class InstanceController : MonoBehaviour
         serverThread.Start();
     }
 
-    // MÈtodo que roda o servidor em uma thread separada
+    // M√©todo que roda o servidor em uma thread separada
     private void RunServer()
     {
         server = new TcpListener(System.Net.IPAddress.Any, 12345); // Escuta na porta 12345
@@ -97,7 +86,7 @@ public class InstanceController : MonoBehaviour
         }
     }
 
-    // MÈtodo para lidar com a comunicaÁ„o do cliente
+    // M√©todo para lidar com a comunica√ß√£o do cliente
     private void HandleClient()
     {
         NetworkStream stream = client.GetStream();
@@ -110,34 +99,116 @@ public class InstanceController : MonoBehaviour
             UnityEngine.Debug.Log("Mensagem recebida: " + message);
 
             // Processa a mensagem recebida
-            if (message.StartsWith("Log:"))
+            if (message.StartsWith("SlotControllerAtivo:"))
+            {
+                string[] parts = message.Split(':');
+                if (parts.Length >= 2)
+                {
+                    string instanceId = parts[1]; // Identificador da inst√¢ncia
+                    UpdateInstancePrefabText(instanceId); // Atualiza o texto da instancePrefab
+                }
+            }
+            else if (message.StartsWith("Log:"))
             {
                 string[] parts = message.Split(':');
                 if (parts.Length >= 3)
                 {
-                    string instanceId = parts[1]; // Identificador da inst‚ncia
+                    string instanceId = parts[1]; // Identificador da inst√¢ncia
                     string logMessage = parts[2]; // Mensagem do log
                     AddLogToUI(instanceId, logMessage);
                 }
+            }
+            else if (message.StartsWith("JackpotWon:"))
+            {
+                // Quando uma inst√¢ncia ganha o Jackpot, resetamos o valor global
+                ResetGlobalJackpot();
+            }
+            else if (message.StartsWith("RequestJackpot"))
+            {
+                // Envia o valor atual do Jackpot para a inst√¢ncia que solicitou
+                SendMessageToClient($"UpdateJackpot:{globalJackpot}");
             }
         }
 
         client.Close();
     }
 
-    // MÈtodo para adicionar logs ‡ interface do usu·rio
+    // M√©todo para enviar mensagem para o cliente
+    private void SendMessageToClient(string message)
+    {
+        if (client == null || !client.Connected)
+        {
+            UnityEngine.Debug.LogWarning("Conex√£o com o cliente n√£o est√° ativa.");
+            return;
+        }
+
+        try
+        {
+            byte[] data = Encoding.UTF8.GetBytes(message);
+            NetworkStream stream = client.GetStream();
+            stream.Write(data, 0, data.Length);
+        }
+        catch (System.Exception e)
+        {
+            UnityEngine.Debug.LogError("Erro ao enviar mensagem para o cliente: " + e.Message);
+        }
+    }
+
+    // M√©todo para atualizar o Jackpot globalmente
+    public void UpdateGlobalJackpot(float newValue)
+    {
+        globalJackpot = newValue;
+        NotifyAllInstances($"UpdateJackpot:{globalJackpot}");
+    }
+
+    // M√©todo para resetar o Jackpot globalmente
+    public void ResetGlobalJackpot()
+    {
+        globalJackpot = 300f;
+        NotifyAllInstances($"ResetJackpot:{globalJackpot}");
+    }
+
+    // M√©todo para notificar todas as inst√¢ncias sobre mudan√ßas no Jackpot
+    private void NotifyAllInstances(string message)
+    {
+        foreach (var process in instanceProcesses)
+        {
+            if (!process.HasExited)
+            {
+                SendMessageToServer(message);
+            }
+        }
+    }
+
+    // M√©todo para atualizar o texto da instancePrefab com o ID recebido
+    private void UpdateInstancePrefabText(string instanceId)
+    {
+        // Encontra a inst√¢ncia correspondente na lista de inst√¢ncias
+        foreach (Transform child in contentContainer)
+        {
+            Text instanceText = child.GetComponentInChildren<Text>();
+            if (instanceText != null && instanceText.text.Contains("Aberta"))
+            {
+                // Atualiza o texto com o ID recebido
+                instanceText.text = $"{instanceId} - Aberta";
+                break;
+            }
+        }
+    }
+
+    // M√©todo para adicionar logs √† interface do usu√°rio
     private void AddLogToUI(string instanceId, string logMessage)
     {
-        // Cria uma nova inst‚ncia do prefab TextInfo
+        // Cria uma nova inst√¢ncia do prefab TextInfo
         GameObject newLog = Instantiate(textInfoPrefab, logContainer);
         Text logText = newLog.GetComponent<Text>();
         if (logText != null)
         {
-            logText.text = $"[{instanceId}] {logMessage}"; // Exibe o ID da inst‚ncia e a mensagem
+            logText.text = $"[{instanceId}] {logMessage}"; // Exibe o ID da inst√¢ncia e a mensagem
         }
     }
 
-    // MÈtodo para enviar mensagem para o servidor
+    // M√©todo para enviar mensagem para o servidor
     private void SendMessageToServer(string message)
     {
         if (client == null)
@@ -150,83 +221,145 @@ public class InstanceController : MonoBehaviour
         stream.Write(data, 0, data.Length);
     }
 
-    // MÈtodo para definir o tamanho da janela
-    private void SetWindowSize(int width, int height)
+    // M√©todo para gerar um ID √∫nico para a inst√¢ncia
+    private int GenerateUniqueInstanceId()
     {
-        Screen.SetResolution(width, height, false); // Define a resoluÁ„o da tela
-        UnityEngine.Debug.Log($"Tamanho da janela definido para {width}x{height}");
+        int newId;
+        do
+        {
+            newId = UnityEngine.Random.Range(0, 10000); // Gera um n√∫mero entre 0000 e 9999
+        } while (instanceIds.Contains(newId)); // Garante que o ID seja √∫nico
+
+        instanceIds.Add(newId); // Adiciona o ID √† lista de IDs existentes
+        return newId;
     }
 
+    // M√©todo para adicionar uma nova inst√¢ncia dinamicamente
     public void AddNextInstance()
     {
-        if (currentIndex < instances.Count)
+        // Gera um ID √∫nico para a nova inst√¢ncia
+        int instanceId = GenerateUniqueInstanceId();
+
+        // Instancia o prefab da inst√¢ncia como filho do Content
+        GameObject newInstance = Instantiate(instancePrefab, contentContainer);
+        newInstance.name = $"Instance_{instanceId:0000}"; // Define o nome da inst√¢ncia no Inspector
+
+        // Configura o texto da inst√¢ncia
+        Text instanceText = newInstance.GetComponentInChildren<Text>();
+        if (instanceText != null)
         {
-            instances[currentIndex].text = "Instancia " + (currentIndex + 1) + " - Aberta";
-            currentIndex++;
+            instanceText.text = $"{instanceId:0000} - Aberta";
+        }
 
-            // Abre uma nova inst‚ncia da build
-            string instanceName = instances[currentIndex - 1].text;
-            UnityEngine.Debug.Log("Abrindo nova inst‚ncia para: " + instanceName);
+        // Configura o bot√£o da inst√¢ncia para remover a inst√¢ncia
+        Button removeButton = newInstance.GetComponentInChildren<Button>();
+        if (removeButton != null)
+        {
+            removeButton.onClick.AddListener(() => RemoveInstance(newInstance, instanceId));
+        }
 
-            // Inicia uma nova inst‚ncia da build com o argumento para carregar a cena "SlotScene"
-            ProcessStartInfo startInfo = new ProcessStartInfo();
-            startInfo.FileName = Application.dataPath + "/../" + Application.productName + ".exe";
-            startInfo.Arguments = "SlotScene"; // Passa o argumento para carregar a cena "SlotScene"
-            Process newProcess = Process.Start(startInfo);
+        // Abre uma nova inst√¢ncia da build
+        ProcessStartInfo startInfo = new ProcessStartInfo();
+        startInfo.FileName = Application.dataPath + "/../" + Application.productName + ".exe";
+        startInfo.Arguments = $"SlotScene {instanceId}"; // Passa o argumento para carregar a cena "SlotScene" e o ID da inst√¢ncia
+        Process newProcess = Process.Start(startInfo);
 
-            // Adiciona o processo ‡ lista de inst‚ncias abertas
-            if (newProcess != null)
+        // Adiciona o processo √† lista de inst√¢ncias abertas
+        if (newProcess != null)
+        {
+            instanceProcesses.Add(newProcess);
+
+            // Monitora o fechamento do processo
+            newProcess.EnableRaisingEvents = true;
+            newProcess.Exited += (sender, e) => OnInstanceProcessExited(newProcess, instanceId, newInstance);
+        }
+
+        // Envia uma mensagem para a nova inst√¢ncia
+        SendMessageToServer($"{instanceId:0000} aberta.");
+
+        // Inicia uma corrotina para esperar a confirma√ß√£o do SlotController
+        StartCoroutine(WaitForSlotControllerConfirmation(instanceId, newInstance));
+    }
+
+    // M√©todo chamado quando o processo da inst√¢ncia √© encerrado
+    private void OnInstanceProcessExited(Process process, int instanceId, GameObject instanceUI)
+    {
+        // Remove a inst√¢ncia da lista de processos
+        instanceProcesses.Remove(process);
+
+        // Remove a inst√¢ncia da lista de IDs
+        instanceIds.Remove(instanceId);
+
+        // Remove a inst√¢ncia da interface do usu√°rio
+        if (instanceUI != null)
+        {
+            Destroy(instanceUI);
+        }
+
+        // Envia uma mensagem de log
+        UnityEngine.Debug.Log($"Inst√¢ncia {instanceId:0000} foi fechada manualmente.");
+        AddLogToUI(instanceId.ToString(), "Fechada manualmente.");
+    }
+
+    private IEnumerator WaitForSlotControllerConfirmation(int instanceId, GameObject newInstance)
+    {
+        float timeout = 10f; // Tempo m√°ximo de espera em segundos
+        float startTime = Time.time;
+
+        bool confirmed = false;
+
+        while (Time.time - startTime < timeout && !confirmed)
+        {
+            // Verifica se o SlotController confirmou que est√° aberto
+            if (instanceIds.Contains(instanceId))
             {
-                instanceProcesses.Add(newProcess);
+                confirmed = true;
+                break;
             }
 
-            // Envia uma mensagem para a nova inst‚ncia
-            SendMessageToServer("Inst‚ncia " + currentIndex + " aberta.");
+            yield return null; // Espera at√© o pr√≥ximo frame
         }
-        else
+
+        if (!confirmed)
         {
-            UnityEngine.Debug.Log("Todas as inst‚ncias est„o abertas");
+            // Se o SlotController n√£o confirmou, remove a inst√¢ncia
+            RemoveInstance(newInstance, instanceId);
+            UnityEngine.Debug.LogWarning($"Inst√¢ncia {instanceId:0000} n√£o confirmou a abertura e foi removida.");
         }
     }
 
-    public void RemoveLastInstance()
+    // M√©todo para remover uma inst√¢ncia
+    private void RemoveInstance(GameObject instance, int instanceId)
     {
-        if (currentIndex > 0)
-        {
-            currentIndex--;
-            instances[currentIndex].text = "Instancia " + (currentIndex + 1) + " - Fechada";
+        // Remove a inst√¢ncia do Content
+        Destroy(instance);
 
-            // Fecha a janela da ˙ltima inst‚ncia aberta
-            if (instanceProcesses.Count > 0)
-            {
-                Process lastProcess = instanceProcesses.Last();
-                if (!lastProcess.HasExited)
-                {
-                    lastProcess.CloseMainWindow(); // Fecha a janela da inst‚ncia
-                    lastProcess.Close(); // Libera os recursos do processo
-                }
-                instanceProcesses.Remove(lastProcess); // Remove o processo da lista
-            }
+        // Remove o ID da lista de IDs
+        instanceIds.Remove(instanceId);
 
-            // Envia uma mensagem para a inst‚ncia fechada
-            SendMessageToServer("Inst‚ncia " + (currentIndex + 1) + " fechada.");
-        }
-        else
+        // Fecha a janela da inst√¢ncia correspondente
+        Process processToClose = instanceProcesses.FirstOrDefault(p => p.Id == instanceId);
+        if (processToClose != null && !processToClose.HasExited)
         {
-            UnityEngine.Debug.Log("Todas as inst‚ncias est„o fechadas");
+            processToClose.CloseMainWindow(); // Fecha a janela da inst√¢ncia
+            processToClose.Close(); // Libera os recursos do processo
+            instanceProcesses.Remove(processToClose); // Remove o processo da lista
         }
+
+        // Envia uma mensagem para a inst√¢ncia fechada
+        SendMessageToServer($"Inst√¢ncia {instanceId:0000} fechada.");
     }
 
     void OnApplicationQuit()
     {
-        // Para o servidor ao fechar a aplicaÁ„o
+        // Para o servidor ao fechar a aplica√ß√£o
         isServerRunning = false;
         if (server != null)
         {
             server.Stop();
         }
 
-        // Fecha todas as inst‚ncias abertas
+        // Fecha todas as inst√¢ncias abertas
         foreach (Process process in instanceProcesses)
         {
             if (!process.HasExited)
