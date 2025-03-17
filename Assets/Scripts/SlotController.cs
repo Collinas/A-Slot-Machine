@@ -1,5 +1,7 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
+using System.Net.Sockets;
+using System.Text;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -64,6 +66,10 @@ public class SlotController : MonoBehaviour
     [Tooltip("Cor do indicador de resultado em caso de ganho nulo.")]
     [SerializeField] private Color loseColor = Color.red;
 
+    private TcpClient client;
+    private NetworkStream stream;
+    private string instanceId; // Identificador da instância
+
     // Lista de prefabs instanciados
     private readonly List<GameObject> instantiatedPrefabs = new();
     // Contador de créditos
@@ -87,6 +93,59 @@ public class SlotController : MonoBehaviour
         InitializeReels();
         //Atualiza a interface do usuário atualizando o valor dos créditos e do jackpot
         UpdateUI();
+
+        // Obtém o identificador da instância (pode ser o índice ou um ID único)
+        instanceId = GetInstanceId();
+
+        // Conecta ao InstanceController
+        ConnectToInstanceController();
+
+        // Envia mensagem de confirmação de que está ativo
+        SendMessageToInstanceController("SlotControllerAtivo");
+    }
+
+    private void OnApplicationQuit()
+    {
+        // Envia mensagem de encerramento
+        SendMessageToInstanceController($"SlotControllerEncerrado:{instanceId}");
+
+        // Fecha a conexão
+        if (client != null)
+        {
+            client.Close();
+        }
+    }
+
+    private void ConnectToInstanceController()
+    {
+        try
+        {
+            client = new TcpClient("127.0.0.1", 12345); // Conecta ao servidor na porta 12345
+            stream = client.GetStream();
+        }
+        catch (System.Exception e)
+        {
+            UnityEngine.Debug.LogError("Erro ao conectar ao InstanceController: " + e.Message);
+        }
+    }
+
+    private void SendMessageToInstanceController(string message)
+    {
+        if (client == null || !client.Connected)
+        {
+            UnityEngine.Debug.LogWarning("Conexão com o InstanceController não está ativa.");
+            return;
+        }
+
+        try
+        {
+            byte[] data = Encoding.UTF8.GetBytes(message);
+            stream.Write(data, 0, data.Length);
+        }
+        catch (System.Exception e)
+        {
+            UnityEngine.Debug.LogError("Erro ao enviar mensagem para o InstanceController: " + e.Message);
+        }
     }
 
     /// <summary>
@@ -145,6 +204,22 @@ public class SlotController : MonoBehaviour
         if (Input.GetKeyDown(KeyCode.C) && !isSpinning && counter > 0) CashoutCredits();
     }
 
+
+    // Método para enviar logs ao InstanceController
+    private void SendLogToInstanceController(string logMessage)
+    {
+        string fullLogMessage = $"Log:{instanceId}:{logMessage}";
+        SendMessageToInstanceController(fullLogMessage);
+    }
+
+    // Método para obter o identificador da instância
+    private string GetInstanceId()
+    {
+        // Aqui você pode gerar um ID único para a instância
+        // Por exemplo, usando o índice da instância ou um GUID
+        return $"Instancia_{UnityEngine.Random.Range(1000, 9999)}"; // Exemplo de ID aleatório
+    }
+
     /// <summary>
     /// Lida com a rotação dos slots.
     /// </summary>
@@ -159,7 +234,10 @@ public class SlotController : MonoBehaviour
         counter--;
         jackpot += jackpotIncrement;
         UpdateUI();
-        Debug.Log($"[Cassino Log] Jogada iniciada. Valor apostado: 1 crédito. Créditos restantes: {counter}");
+
+        // Envia o log ao InstanceController
+        string logMessage = $"[Cassino Log] Jogada iniciada. Valor apostado: 1 crédito. Créditos restantes: {counter}";
+        SendLogToInstanceController(logMessage);
     }
 
     /// <summary>

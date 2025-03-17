@@ -13,6 +13,13 @@ public class InstanceController : MonoBehaviour
 {
     [SerializeField]
     private List<Text> instances;
+
+    [SerializeField]
+    private GameObject textInfoPrefab; // Prefab para exibir as mensagens
+
+    [SerializeField]
+    private Transform logContainer; // Container com VerticalLayoutGroup para exibir os logs
+
     private int currentIndex = 0;
 
     // Variáveis para comunicação via socket
@@ -101,10 +108,33 @@ public class InstanceController : MonoBehaviour
         {
             string message = Encoding.UTF8.GetString(buffer, 0, bytesRead);
             UnityEngine.Debug.Log("Mensagem recebida: " + message);
-            // Aqui você pode processar a mensagem recebida e tomar ações apropriadas
+
+            // Processa a mensagem recebida
+            if (message.StartsWith("Log:"))
+            {
+                string[] parts = message.Split(':');
+                if (parts.Length >= 3)
+                {
+                    string instanceId = parts[1]; // Identificador da instância
+                    string logMessage = parts[2]; // Mensagem do log
+                    AddLogToUI(instanceId, logMessage);
+                }
+            }
         }
 
         client.Close();
+    }
+
+    // Método para adicionar logs à interface do usuário
+    private void AddLogToUI(string instanceId, string logMessage)
+    {
+        // Cria uma nova instância do prefab TextInfo
+        GameObject newLog = Instantiate(textInfoPrefab, logContainer);
+        Text logText = newLog.GetComponent<Text>();
+        if (logText != null)
+        {
+            logText.text = $"[{instanceId}] {logMessage}"; // Exibe o ID da instância e a mensagem
+        }
     }
 
     // Método para enviar mensagem para o servidor
