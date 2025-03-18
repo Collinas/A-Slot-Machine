@@ -742,7 +742,7 @@ MonoBehaviour:
       m_Calls:
       - m_Target: {fileID: 1046266330}
         m_TargetAssemblyTypeName: InstanceController, Assembly-CSharp
-        m_MethodName: CashoutAllInstances
+        m_MethodName: SimulateCKeyPress
         m_Mode: 1
         m_Arguments:
           m_ObjectArgument: {fileID: 0}
@@ -1450,7 +1450,7 @@ MonoBehaviour:
       m_Calls:
       - m_Target: {fileID: 1046266330}
         m_TargetAssemblyTypeName: InstanceController, Assembly-CSharp
-        m_MethodName: AddCreditsToAllInstances
+        m_MethodName: SimulateXKeyPress
         m_Mode: 1
         m_Arguments:
           m_ObjectArgument: {fileID: 0}
@@ -1584,7 +1584,7 @@ MonoBehaviour:
       m_Calls:
       - m_Target: {fileID: 1046266330}
         m_TargetAssemblyTypeName: InstanceController, Assembly-CSharp
-        m_MethodName: PlayAllInstances
+        m_MethodName: SimulateZKeyPress
         m_Mode: 1
         m_Arguments:
           m_ObjectArgument: {fileID: 0}

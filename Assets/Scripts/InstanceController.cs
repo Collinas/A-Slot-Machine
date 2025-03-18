@@ -105,7 +105,7 @@ public class InstanceController : MonoBehaviour
                 if (parts.Length >= 2)
                 {
                     string instanceId = parts[1]; // Identificador da instância
-                    UpdateInstancePrefabText(instanceId); // Atualiza o texto da instancePrefab
+                    //UpdateInstancePrefabText(instanceId); // Atualiza o texto da instancePrefab
                 }
             }
             else if (message.StartsWith("Log:"))
@@ -176,22 +176,6 @@ public class InstanceController : MonoBehaviour
             if (!process.HasExited)
             {
                 SendMessageToServer(message);
-            }
-        }
-    }
-
-    // Método para atualizar o texto da instancePrefab com o ID recebido
-    private void UpdateInstancePrefabText(string instanceId)
-    {
-        // Encontra a instância correspondente na lista de instâncias
-        foreach (Transform child in contentContainer)
-        {
-            Text instanceText = child.GetComponentInChildren<Text>();
-            if (instanceText != null && instanceText.text.Contains("Aberta"))
-            {
-                // Atualiza o texto com o ID recebido
-                instanceText.text = $"{instanceId} - Aberta";
-                break;
             }
         }
     }

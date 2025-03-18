@@ -86,16 +86,18 @@ public class SlotController : MonoBehaviour
     [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Auto)]
     private static extern bool SetWindowText(IntPtr hWnd, string lpString);
 
-    private string GenerateInstanceId()
-    {
-        // Gera um ID único para a instância
-        return $"Instancia_{UnityEngine.Random.Range(1000, 9999)}";
-    }
-
     private void Start()
     {
-        // Gera um ID único para a instância
-        instanceId = GenerateInstanceId();
+        // Obtém o ID da instância a partir dos argumentos da linha de comando
+        string[] args = Environment.GetCommandLineArgs();
+        if (args.Length > 2)
+        {
+            instanceId = args[2];
+        }
+        else
+        {
+            instanceId = "UnknownInstance";
+        }
 
         // Define o título da janela da instância
         IntPtr windowHandle = Process.GetCurrentProcess().MainWindowHandle;
@@ -513,7 +515,7 @@ public class SlotController : MonoBehaviour
         bool isJackpot = false;
         int jackpotAmount = 0;
 
-        if (UnityEngine.Random.Range(1, 2) == 1)
+        if (UnityEngine.Random.Range(1, 10) == 1)
         {
             isJackpot = true;
             int jackpotCredits = Mathf.FloorToInt(localJackpot);
