@@ -1785,13 +1785,11 @@ MonoBehaviour:
   finalPosReel2: {fileID: 1292166443}
   finalPosReel3: {fileID: 1333914828}
   counterText: {fileID: 1098001841}
-  jackpotText: {fileID: 1315419976}
   numberContainer: {fileID: 1110510618}
   resultIndicator: {fileID: 293686354}
   resultText: {fileID: 946007414}
+  log001CounterText: {fileID: 1315419976}
   initialCredits: 1
-  initialJackpot: 300
-  jackpotIncrement: 1
   prefabMoveDuration: 0.125
   delayBetweenSpins: 0.025
   delayToPlayAgain: 0.2

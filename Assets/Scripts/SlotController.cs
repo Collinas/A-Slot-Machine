@@ -9,78 +9,43 @@ using System.Runtime.InteropServices;
 using System;
 using System.Threading;
 
-/// <summary>
-/// Controlador de slots que gerencia a geração de números aleatórios, contagem de créditos e jackpot.
-/// </summary>
 public class SlotController : MonoBehaviour
 {
     [Header("Prefabs e Posições")]
-    [Tooltip("Lista de prefabs que serão instanciados nos reels.")]
     [SerializeField] private List<GameObject> prefabs;
-    [Tooltip("Posição de spawn do reel1.")]
     [SerializeField] private Transform initialPosReel1;
-    [Tooltip("Posição de spawn do reel2.")]
     [SerializeField] private Transform initialPosReel2;
-    [Tooltip("Posição de spawn do reel3.")]
     [SerializeField] private Transform initialPosReel3;
-    [Tooltip("Lista de 3 posições do reel1.")]
     [SerializeField] private List<Transform> firstReel;
-    [Tooltip("Lista de 3 posições do reel2.")]
     [SerializeField] private List<Transform> secondReel;
-    [Tooltip("Lista de 3 posições do reel3.")]
     [SerializeField] private List<Transform> thirdReel;
-    [Tooltip("Posição para destruir prefabs do reel1.")]
     [SerializeField] private Transform finalPosReel1;
-    [Tooltip("Posição para destruir prefabs do reel2.")]
     [SerializeField] private Transform finalPosReel2;
-    [Tooltip("Posição para destruir prefabs do reel3.")]
     [SerializeField] private Transform finalPosReel3;
 
     [Header("UI Elements")]
-    [Tooltip("Texto que exibe o contador de créditos.")]
     [SerializeField] private Text counterText;
-    [Tooltip("Texto que exibe o valor do jackpot.")]
-    [SerializeField] private Text jackpotText;
-    [Tooltip("Container para os prefabs instanciados.")]
     [SerializeField] private GameObject numberContainer;
-    [Tooltip("Barra horizontal indicador do resultado da rodada.")]
     [SerializeField] private RawImage resultIndicator;
-    [Tooltip("Texto que exibe o créditos ganhos na rodada.")]
     [SerializeField] private Text resultText;
+    [SerializeField] private Text log001CounterText; // Novo campo para exibir o contador de LOG001
 
     [Header("Configurações de Jogo")]
-    [Tooltip("Créditos iniciais do jogador.")]
     [SerializeField] private int initialCredits = 1;
-    [Tooltip("Valor inicial do jackpot.")]
-    [SerializeField] private float initialJackpot = 300f;
-    [Tooltip("Incremento do jackpot a cada rodada de acordo com a aposta feita.")]
-    [SerializeField] private float jackpotIncrement = 0.01f;
-    [Tooltip("Duração do movimento dos prefabs.")]
     [SerializeField] private float prefabMoveDuration = 0.5f;
-    [Tooltip("Atraso entre os spawn de prefabs nos reels.")]
     [SerializeField] private float delayBetweenSpins = 0.5f;
-    [Tooltip("Atraso para jogar novamente após uma rodada.")]
     [SerializeField] private float delayToPlayAgain = 1.0f;
 
     [Header("Colors")]
-    [Tooltip("Cor padrão do indicador de resultado.")]
     [SerializeField] private Color defaultColor = Color.white;
-    [Tooltip("Cor do indicador de resultado em caso de ganho.")]
     [SerializeField] private Color winColor = Color.green;
-    [Tooltip("Cor do indicador de resultado em caso de ganho nulo.")]
     [SerializeField] private Color loseColor = Color.red;
 
     private TcpClient client;
     private NetworkStream stream;
-    private string instanceId; // Identificador da instância
-
-    // Lista de prefabs instanciados
+    private string instanceId;
     private readonly List<GameObject> instantiatedPrefabs = new();
-    // Contador de créditos
     private int counter;
-    // Valor do jackpot local
-    private float localJackpot;
-    // Indica se o jogo está acontecendo
     private bool isSpinning = false;
 
     [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Auto)]
@@ -88,63 +53,38 @@ public class SlotController : MonoBehaviour
 
     private void Start()
     {
-        // Obtém o ID da instância a partir dos argumentos da linha de comando
         string[] args = Environment.GetCommandLineArgs();
-        if (args.Length > 2)
-        {
-            instanceId = args[2];
-        }
-        else
-        {
-            instanceId = "UnknownInstance";
-        }
+        instanceId = args.Length > 2 ? args[2] : "UnknownInstance";
 
-        // Define o título da janela da instância
         IntPtr windowHandle = Process.GetCurrentProcess().MainWindowHandle;
         if (windowHandle != IntPtr.Zero)
         {
             SetWindowText(windowHandle, $"{instanceId}");
         }
 
-        // Define o counter e o jackpot de acordo com os valores iniciais
         counter = initialCredits;
-        localJackpot = initialJackpot;
         resultIndicator.color = defaultColor;
         resultText.text = "";
         ValidateSetup();
         InitializeReels();
         UpdateUI();
 
-        // Conecta ao InstanceController
         ConnectToInstanceController();
-
-        // Envia mensagem de confirmação de que está ativo, incluindo o ID gerado
         SendMessageToInstanceController($"SlotControllerAtivo:{instanceId}");
-
-        // Solicita o valor atual do Jackpot ao InstanceController
-        SendMessageToInstanceController("RequestJackpot");
     }
 
     private void OnApplicationQuit()
     {
-        // Envia mensagem de encerramento
         SendMessageToInstanceController($"SlotControllerEncerrado:{instanceId}");
-
-        // Fecha a conexão
-        if (client != null)
-        {
-            client.Close();
-        }
+        client?.Close();
     }
 
     private void ConnectToInstanceController()
     {
         try
         {
-            client = new TcpClient("127.0.0.1", 12345); // Conecta ao servidor na porta 12345
+            client = new TcpClient("127.0.0.1", 12345);
             stream = client.GetStream();
-
-            // Inicia uma thread para receber mensagens do InstanceController
             Thread receiveThread = new Thread(new ThreadStart(ReceiveMessages));
             receiveThread.Start();
         }
@@ -180,25 +120,45 @@ public class SlotController : MonoBehaviour
 
     private void HandleMessageFromInstanceController(string message)
     {
-        if (message.StartsWith("UpdateJackpot:"))
+        if (message.StartsWith("Log:"))
         {
             string[] parts = message.Split(':');
-            if (parts.Length >= 2)
+            if (parts.Length >= 3)
             {
-                float newJackpotValue = float.Parse(parts[1]);
-                localJackpot = newJackpotValue;
-                UpdateJackpotText();
+                string logMessage = parts[2];
+                UnityEngine.Debug.Log($"[{parts[1]}] {logMessage}");
             }
         }
-        else if (message.StartsWith("ResetJackpot:"))
+        else if (message.StartsWith("LogCounterUpdate:"))
         {
+            // Atualiza o contador de LOG001 no UI
             string[] parts = message.Split(':');
-            if (parts.Length >= 2)
+            if (parts.Length >= 2 && int.TryParse(parts[1], out int counterValue))
             {
-                float newJackpotValue = float.Parse(parts[1]);
-                localJackpot = newJackpotValue;
-                UpdateJackpotText();
+                UpdateLog001CounterText(counterValue);
             }
+        }
+        else if (message.StartsWith("LogCounterReset:"))
+        {
+            // Adiciona o valor do contador antes do reset aos créditos da instância
+            string[] parts = message.Split(':');
+            if (parts.Length >= 2 && int.TryParse(parts[1], out int resetValue))
+            {
+                counter += resetValue;
+                UpdateCounterText();
+
+                // Envia um novo log informando o valor adicionado
+                string resetLogMessage = $"LOG006 JACKPOT INSTANCE={instanceId} VALUE={resetValue} CREDITS={counter}";
+                SendLogToInstanceController(resetLogMessage);
+            }
+        }
+    }
+
+    private void UpdateLog001CounterText(int counterValue)
+    {
+        if (log001CounterText != null)
+        {
+            log001CounterText.text = $"{counterValue}";
         }
     }
 
@@ -221,9 +181,6 @@ public class SlotController : MonoBehaviour
         }
     }
 
-    /// <summary>
-    /// Valida a configuração inicial do jogo.
-    /// </summary>
     private void ValidateSetup()
     {
         if (prefabs.Count != 10 || firstReel.Count != 3 || secondReel.Count != 3 || thirdReel.Count != 3)
@@ -232,9 +189,6 @@ public class SlotController : MonoBehaviour
         }
     }
 
-    /// <summary>
-    /// Inicializa os 3 reels com 3 prefabs cada.
-    /// </summary>
     private void InitializeReels()
     {
         for (int j = 0; j < 3; j++)
@@ -256,37 +210,24 @@ public class SlotController : MonoBehaviour
         }
     }
 
-    /// <summary>
-    /// Atualiza a interface do usuário com os valores atuais.
-    /// </summary>
     private void UpdateUI()
     {
         UpdateCounterText();
-        UpdateJackpotText();
     }
 
     private void Update()
     {
-        ///<summary>
-        ///Ao apertar Z o jogo irá rodar, 
-        ///ao apertar X o jogador ganha 10 créditos e 
-        ///ao apertar C o jogador irá retirar todos os créditos
-        /// </summary>
         if (Input.GetKeyDown(KeyCode.Z) && !isSpinning) HandleSpin();
         if (Input.GetKeyDown(KeyCode.X) && !isSpinning) AddCredits(10);
         if (Input.GetKeyDown(KeyCode.C) && !isSpinning && counter > 0) CashoutCredits();
     }
 
-    // Método para enviar logs ao InstanceController
     private void SendLogToInstanceController(string logMessage)
     {
         string fullLogMessage = $"Log:{instanceId}:{logMessage}";
         SendMessageToInstanceController(fullLogMessage);
     }
 
-    /// <summary>
-    /// Lida com a rotação dos slots.
-    /// </summary>
     private void HandleSpin()
     {
         if (isSpinning) return;
@@ -296,18 +237,12 @@ public class SlotController : MonoBehaviour
         resultText.text = "";
         StartCoroutine(SpinReels());
         counter--;
-        localJackpot += jackpotIncrement;
         UpdateUI();
 
-        // Envia o log ao InstanceController
         string logMessage = "LOG001 START BET=1 CREDITS=" + counter;
         SendLogToInstanceController(logMessage);
     }
 
-    /// <summary>
-    /// Adiciona créditos ao contador.
-    /// </summary>
-    /// <param name="amount">Quantidade de créditos a adicionar.</param>
     private void AddCredits(int amount)
     {
         counter += amount;
@@ -316,9 +251,6 @@ public class SlotController : MonoBehaviour
         SendLogToInstanceController(logMessage);
     }
 
-    /// <summary>
-    /// Realiza o cashout dos créditos.
-    /// </summary>
     private void CashoutCredits()
     {
         string logMessage = "LOG003 CASH AMOUNT=" + counter;
@@ -327,9 +259,6 @@ public class SlotController : MonoBehaviour
         UpdateCounterText();
     }
 
-    /// <summary>
-    /// Gera números aleatórios e faz a animação dos rolos.
-    /// </summary>
     private IEnumerator SpinReels()
     {
         StartCoroutine(TemporarySpinAnimation(prefabMoveDuration));
@@ -372,14 +301,10 @@ public class SlotController : MonoBehaviour
         yield return new WaitForSeconds(delayBetweenSpins);
 
         CheckWinningCombination(middleRowIndices);
-        CheckJackpot();
         yield return new WaitForSeconds(delayToPlayAgain);
         isSpinning = false;
     }
 
-    /// <summary>
-    /// Animação temporária de rotação dos rolos.
-    /// </summary>
     private IEnumerator TemporarySpinAnimation(float duration)
     {
         float elapsedTime = 0f;
@@ -406,9 +331,6 @@ public class SlotController : MonoBehaviour
         }
     }
 
-    /// <summary>
-    /// Move o prefab de uma posição inicial para uma posição final com velocidade constante.
-    /// </summary>
     private IEnumerator MovePrefab(GameObject prefab, Vector3 finalDestination, Transform moveToObject, float duration)
     {
         if (prefab == null) yield break;
@@ -471,9 +393,6 @@ public class SlotController : MonoBehaviour
         }
     }
 
-    /// <summary>
-    /// Verifica se a fileira do meio contém uma combinação vencedora.
-    /// </summary>
     private void CheckWinningCombination(int[] middleRow)
     {
         bool hasWinningCombo = middleRow[0] == middleRow[1] && middleRow[1] == middleRow[2];
@@ -507,47 +426,8 @@ public class SlotController : MonoBehaviour
         }
     }
 
-    /// <summary>
-    /// Verifica se o jogador ganhou o jackpot.
-    /// </summary>
-    private void CheckJackpot()
-    {
-        bool isJackpot = false;
-        int jackpotAmount = 0;
-
-        if (UnityEngine.Random.Range(1, 10) == 1)
-        {
-            isJackpot = true;
-            int jackpotCredits = Mathf.FloorToInt(localJackpot);
-            jackpotAmount = jackpotCredits;
-            counter += jackpotCredits;
-            localJackpot = initialJackpot; // Reset local
-            UpdateUI();
-
-            // Notifica o InstanceController que o Jackpot foi ganho
-            SendMessageToInstanceController($"JackpotWon:{localJackpot}");
-        }
-
-        if (isJackpot)
-        {
-            resultIndicator.color = winColor;
-            resultText.text = $"Jackpot +{jackpotAmount}";
-        }
-    }
-
-    /// <summary>
-    /// Atualiza o texto do contador de créditos.
-    /// </summary>
     private void UpdateCounterText()
     {
         counterText.text = counter.ToString();
-    }
-
-    /// <summary>
-    /// Atualiza o texto do jackpot.
-    /// </summary>
-    private void UpdateJackpotText()
-    {
-        jackpotText.text = Mathf.Floor(localJackpot).ToString();
     }
 }
