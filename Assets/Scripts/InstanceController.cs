@@ -32,6 +32,9 @@ public class InstanceController : MonoBehaviour
         Application.runInBackground = true;
         if (contentContainer == null) UnityEngine.Debug.LogWarning("O Content container não foi configurado no inspetor.");
 
+        // Define a resolução inicial da janela para 500x500
+        Screen.SetResolution(700, 500, false);
+
         string[] args = Environment.GetCommandLineArgs();
         if (args.Length > 1 && args[1] == "SlotScene") SceneManager.LoadScene("SlotScene");
 
